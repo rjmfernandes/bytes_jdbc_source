@@ -1,0 +1,28 @@
+{
+  "connect.name": "io.confluent.csta.byteconv.MyTable",
+  "fields": [
+    {
+      "name": "id",
+      "type": "int"
+    },
+    {
+      "default": null,
+      "name": "name",
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    {
+      "default": null,
+      "name": "data",
+      "type": [
+        "null",
+        "bytes"
+      ]
+    }
+  ],
+  "name": "MyTable",
+  "namespace": "io.confluent.csta.byteconv",
+  "type": "record"
+}
