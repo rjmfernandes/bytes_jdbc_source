@@ -367,5 +367,6 @@ So we are properly capturing the bytes returned by the Oracle query and we are a
 docker compose down -v
 cd oracle
 docker compose down -v
+rm -fr data
 cd ..
 ```
