@@ -4,3 +4,6 @@
 
 plugins/confluent*
 target
+
+oracle/data
+oracle/install

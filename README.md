@@ -7,6 +7,10 @@
   - [JDBC Source Connector handling bytes field](#jdbc-source-connector-handling-bytes-field)
     - [Another encoding](#another-encoding)
   - [JDBC Source Connector handling bytes field from a text field](#jdbc-source-connector-handling-bytes-field-from-a-text-field)
+  - [Oracle](#oracle)
+    - [Setup](#setup-1)
+    - [Create User and Table](#create-user-and-table)
+    - [JDBC Source test](#jdbc-source-test)
   - [Cleanup](#cleanup)
 
 ## Setup
@@ -232,8 +236,136 @@ Value: {"id": 1, "name": "example", "data": "ã\u0088\u0089¢@\u0089¢@\u0081@\u
 Decoded data: This is a binary string
 ```
 
+## Oracle 
+
+### Setup
+
+Execute first steps to pull the login and pull the image of oracle database from https://dev.to/docker/how-to-run-oracle-database-in-a-docker-container-using-docker-compose-1c9b.
+
+Or if you are on MAC M1 https://www.simonpcouch.com/blog/2024-03-14-oracle/index.html The compose file here is adapted to this final case.
+
+```shell
+cd oracle
+docker compose up -d
+```
+
+It will take a while to start. Run:
+
+```shell
+docker compose logs -f
+```
+
+And wait until you see:
+
+```
+#########################
+DATABASE IS READY TO USE!
+#########################
+```
+
+### Create User and Table
+
+We have used [Oracle SQL Developer Extension for VSCode](https://marketplace.visualstudio.com/items?itemName=Oracle.sql-developer):
+
+```sql
+CREATE USER my_user IDENTIFIED BY mypassword
+DEFAULT TABLESPACE users
+TEMPORARY TABLESPACE temp
+QUOTA UNLIMITED ON users;
+GRANT CONNECT, RESOURCE TO my_user;
+GRANT CREATE SESSION, CREATE TABLE, CREATE VIEW, CREATE PROCEDURE, CREATE SEQUENCE TO my_user;
+```
+
+Let's connect as our user `my_user/mypassword` to the database and create our table and populate it:
+
+```sql
+CREATE TABLE mytable (
+    id NUMBER PRIMARY KEY,
+    name VARCHAR(100),
+    data VARCHAR(100)
+);
+INSERT INTO mytable (id,name,data)
+VALUES (0,'example','This is a binary string');
+COMMIT;
+```
+
+For previous test run:
+
+```sql
+SELECT UTL_RAW.CAST_TO_RAW(convert(data,'WE8EBCDIC284','WE8ISO8859P1')) from mytable;
+```
+
+You should get something like:
+
+```
+E38889A24089A24081408289958199A840A2A399899587
+```
+
+(We are using `WE8EBCDIC284` considering it was the encode available on opur oracle instance and not `BSWE8EBCDIC285`.)
+
+### JDBC Source test
+
+Now let's run our connector:
+
+```shell
+curl -i -X PUT -H "Accept:application/json" \
+     -H "Content-Type: application/json" http://localhost:8083/connectors/my-source-oracle/config \
+     -d "{
+             \"connector.class\": \"io.confluent.connect.jdbc.JdbcSourceConnector\",
+             \"connection.url\": \"jdbc:oracle:thin:@//host.docker.internal:1521/ORCLPDB1\",
+             \"connection.user\": \"my_user\",
+             \"connection.password\": \"mypassword\",
+             \"topic.prefix\": \"oracle-mytable\",
+             \"poll.interval.ms\" : 3600000,
+             \"query\": \"SELECT ID AS id, NAME as name, UTL_RAW.CAST_TO_RAW(convert(DATA,'WE8EBCDIC284','WE8ISO8859P1')) as data FROM mytable WHERE id IS NOT NULL\",
+             \"mode\": \"bulk\",
+             \"transforms\": \"RenameIdField, CastIdField, RenameNameField, RenameDataField, SchemaTransform\",
+             \"transforms.RenameIdField.type\": \"org.apache.kafka.connect.transforms.ReplaceField\$Value\",
+             \"transforms.RenameIdField.renames\": \"ID:id\",
+             \"transforms.CastIdField.type\": \"org.apache.kafka.connect.transforms.Cast\$Value\",
+             \"transforms.CastIdField.spec\": \"id:int32\",
+             \"transforms.RenameNameField.type\": \"org.apache.kafka.connect.transforms.ReplaceField\$Value\",
+             \"transforms.RenameNameField.renames\": \"NAME:name\",
+             \"transforms.RenameDataField.type\": \"org.apache.kafka.connect.transforms.ReplaceField\$Value\",
+             \"transforms.RenameDataField.renames\": \"DATA:data\",
+             \"transforms.SchemaTransform.type\": \"org.apache.kafka.connect.transforms.SetSchemaMetadata\$Value\",
+            \"transforms.SchemaTransform.schema.name\": \"io.confluent.csta.byteconv.MyTable\",
+            \"pk.mode\": \"record_value\",    
+            \"pk.fields\": \"id\"  
+     }"
+```
+
+You should see on your topic a message as:
+
+```json
+{
+  "id": "\u0000",
+  "name": {
+    "string": "example"
+  },
+  "data": {
+    "bytes": "ã¢@¢@@¨@¢£"
+  }
+}
+```
+
+Which is quite different than `E38889A24089A24081408289958199A840A2A399899587`
+
+But if we run `io.confluent.csta.byteconv.avro.AvroConsumer2` we can see we get:
+
+```
+Key: null
+Value: {"id": 0, "name": "example", "data": "ã\u0088\u0089¢@\u0089¢@\u0081@\u0082\u0089\u0095\u0081\u0099¨@¢£\u0099\u0089\u0095\u0087"}
+Decoded data: This is a binary string
+```
+
+So we are properly capturing the bytes returned by the Oracle query and we are able to decode with the right encoding `IBM285` in our java class.
+
 ## Cleanup
 
 ```shell
 docker compose down -v
+cd oracle
+docker compose down -v
+cd ..
 ```

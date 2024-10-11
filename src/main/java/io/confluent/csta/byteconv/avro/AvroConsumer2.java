@@ -3,9 +3,12 @@ package io.confluent.csta.byteconv.avro;
 import java.io.UnsupportedEncodingException;
 
 
-public class AvroConsumer {
+
+public class AvroConsumer2 {
 
     public static void main(String[] args) throws UnsupportedEncodingException {
-        GeneralAvroConsumer.readTopic("postgres2-mytable2");
+        GeneralAvroConsumer.readTopic("oracle-mytable");
     }
+
+
 }

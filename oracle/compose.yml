@@ -1,0 +1,12 @@
+services:
+     oracle:
+         image:  oracle/database:19.3.0-ee
+         ports:
+             - 1521:1521
+         volumes:
+             - ./data:/opt/oracle/oradata
+         environment:
+             ORACLE_ALLOW_REMOTE: true
+             ORACLE_SID: ORCLCDB
+             ORACLE_PDB: ORCLPDB1
+             ORACLE_PWD: Oracle_123
