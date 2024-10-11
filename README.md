@@ -339,7 +339,7 @@ You should see on your topic a message as:
 
 ```json
 {
-  "id": "\u0000",
+  "id": 0,
   "name": {
     "string": "example"
   },
@@ -349,9 +349,7 @@ You should see on your topic a message as:
 }
 ```
 
-Which is quite different than `E38889A24089A24081408289958199A840A2A399899587`
-
-But if we run `io.confluent.csta.byteconv.avro.AvroConsumer2` we can see we get:
+Which is quite different than `E38889A24089A24081408289958199A840A2A399899587` but if we run `io.confluent.csta.byteconv.avro.AvroConsumer2` we can see we get:
 
 ```
 Key: null
